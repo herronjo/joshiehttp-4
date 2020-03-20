@@ -189,7 +189,10 @@ function serverListener(c, https) {
 							if (req.path.endsWith(".sjs")) {
 								var execopts = {
 									maxBuffer: 100000000,
-									env: {}
+									stdio: ['pipe','pipe','pipe','ipc'],
+									env: {
+										'PATH': process.env['PATH']
+									}
 								}
 								if (conf[req.host].legacy) {
 									var datatmp = req.data.split("&");
@@ -211,7 +214,7 @@ function serverListener(c, https) {
 								execopts.env.COOKIES = JSON.stringify(req.cookies);
 								execopts.env.REQIP = c.remoteAddress;
 								execopts.env.DATA = req.data;
-								var worker = proc.spawn("node", [conf[req.host].location+req.path], execopts);
+								var worker = proc.fork(conf[req.host].location+req.path, [], execopts);
 								var datats = Buffer.alloc(0);
 								worker.stdout.on('data', function(stdout) {
 									if (stdout.toString().includes("HEAD:") && conf[req.host].legacy) {
@@ -220,8 +223,14 @@ function serverListener(c, https) {
 										datats = Buffer.concat([datats, stdout]);
 									}
 								});
+								worker.on('message', function(msg) {
+									headersts[msg.toString().split(":")[0]] = msg.toString().split(":")[1].trim();
+								});
+								worker.on('error', function(err) {
+									console.log(err);
+								});
 								worker.on('close', function(code) {
-									headersts['Content-Length'] = datats.length;
+									headersts['content-length'] = datats.length;
 									c.write("HTTP/1.1 200 OK\r\n");
 									for (var header in headersts) {
 										c.write(header+": "+headersts[header]+"\r\n");
@@ -229,9 +238,6 @@ function serverListener(c, https) {
 									c.write("\r\n");
 									c.write(datats);
 									c.end();
-								});
-								worker.on('message', function(msg) {
-									headersts[stdout.toString().split(":")[0]] = stdout.toString().split(":")[1].trim();
 								});
 							} else {
 								c.write("HTTP/1.1 200 OK\r\n");
