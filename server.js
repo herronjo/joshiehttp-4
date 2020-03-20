@@ -5,7 +5,7 @@ const fs = require('fs');
 const proc = require('child_process');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
-var conf = {"default":{"type":"local","location":"."}};
+var conf = {"default":{"type":"local","location":".","upgradeInsecure":true}};
 var mimes = {"": "application/octet-stream"};
 var isKilled = false;
 
@@ -60,7 +60,7 @@ function readconf() {
 	log("Reloaded conf");
 }
 
-function serverListener(c) {
+function serverListener(c, https) {
 	var ended = false;
 	function write(data) {
 		if (!ended) {
@@ -82,7 +82,7 @@ function serverListener(c) {
 		process.setuid("secureweb");
 		process.seteuid("secureweb");
 	} catch(err) {
-		log("ERROR: Unable to de-elevate permissions, please add the \"secureweb\" user to your system.");
+		log("ERROR: Unable to de-escalate permissions, please add the \"secureweb\" user to your system.");
 	}
 	var tmpbuf = "";
 	var req = {
@@ -106,7 +106,7 @@ function serverListener(c) {
 	c.on('data', function(data) {
 		tmpbuf += data.toString();
 		if (tmpbuf.replace(/\r/g, "").includes("\n\n")) {
-			var headersts = {"access-control-allow-origin":"*"};
+			var headersts = {"Access-Control-Allow-Origin":"*"};
 			var tmp = tmpbuf.split("\n");
 			req.method = tmp[0].split(" ")[0];
 			req.path = tmp[0].split(" ")[1].split("?")[0];
@@ -148,145 +148,150 @@ function serverListener(c) {
 			req.data = tmp.slice(headersend,tmp.length).join("\n");
 			log(c.remoteAddress+" "+req.method+" "+req.headers.host+tmp[0].split(" ")[1]);
 			if (conf[req.host] == undefined) {req.host = "default";}
-			if (conf[req.host].type == "local") {
-				try {if (req.path.endsWith("/") == false) {if (fs.statSync(conf[req.host].location+req.path).isDirectory()) {req.path = req.path+"/";headersts.refresh = "0;url="+req.path;}}} catch(err) {}
-				if (req.path.endsWith("/")) {if(fs.existsSync(conf[req.host].location+req.path+'index.sjs')) {req.path = req.path+"index.sjs";} else {req.path = req.path+"index.html";}}
-				fs.stat(conf[req.host].location+req.path, function(err, stat) {
-					if (err != undefined) {
-						switch(err.code) {
-							case "default":
-								fs.stat(conf[req.host].location+"/500.html", function(err2, stat2) {
-									if (err2 != undefined) {
-										c.end("HTTP/1.1 500 Server Error\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Error accessing file "+req.path+"<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+			if (conf[req.host].upgradeInsecure && req.headers['upgrade-insecure-requests'] == "1" && !https && JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1) {
+				c.end("HTTP/1.1 307 Moved Temporarily\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\nLocation: https://"+req.headers.host+tmp[0].split(" ")[1]+"\r\nVary: Upgrade-Insecure-Requests\r\n\r\nUpgrading to HTTPS...");
+			} else {
+				if (conf[req.host].type == "local") {
+					try {if (req.path.endsWith("/") == false) {if (fs.statSync(conf[req.host].location+req.path).isDirectory()) {req.path = req.path+"/";headersts.refresh = "0;url="+req.path;}}} catch(err) {}
+					if (req.path.endsWith("/")) {if(fs.existsSync(conf[req.host].location+req.path+'index.sjs')) {req.path = req.path+"index.sjs";} else {req.path = req.path+"index.html";}}
+					fs.stat(conf[req.host].location+req.path, function(err, stat) {
+						if (err != undefined) {
+							switch(err.code) {
+								case "default":
+									fs.stat(conf[req.host].location+"/500.html", function(err2, stat2) {
+										if (err2 != undefined) {
+											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Error accessing file "+req.path+"<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+										} else {
+											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/500.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+										}
+									});
+									break;
+								case "EACCES":
+									fs.stat(conf[req.host].location+"/403.html", function(err2, stat2) {
+										if (err2 != undefined) {
+											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 403</title></head><body><h1>HTTP Error 403</h1>Can not read file "+req.path+"<br/><br/><i>Technical information:</i><br/>Make sure your file is readable by the webserver user.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+										} else {
+											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/403.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+										}
+									});
+									break;
+								case "ENOENT":
+									fs.stat(conf[req.host].location+"/404.html", function(err2, stat2) {
+										if (err2 != undefined) {
+											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 404</title></head><body><h1>HTTP Error 404</h1>File "+req.path+" not found<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+										} else {
+											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/404.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+										}
+									});
+									break;
+							}
+						} else {
+							if (req.path.endsWith(".sjs")) {
+								var execopts = {
+									maxBuffer: 100000000,
+									env: {}
+								}
+								if (conf[req.host].legacy) {
+									var datatmp = req.data.split("&");
+									for (var data in datatmp) {
+										req.params[datatmp[data].split("=")[0]] = datatmp[data].split("=")[1];
+									}
+								}
+								for (var param in req.params) {
+									execopts['env'][param] = req.params[param];
+								}
+								execopts.env.HOST = req.host;
+								execopts.env.METHOD = req.method;
+								execopts.env.PATH = process.env.PATH;
+								execopts.env.PWD = conf[req.host].location;
+								execopts.env.CWD = conf[req.host].location;
+								execopts.cwd = conf[req.host].location;
+								req.headers.reqip = c.remoteAddress;
+								execopts.env.HEADERS = JSON.stringify(req.headers);
+								execopts.env.COOKIES = JSON.stringify(req.cookies);
+								execopts.env.REQIP = c.remoteAddress;
+								execopts.env.DATA = req.data;
+								var worker = proc.spawn("node", [conf[req.host].location+req.path], execopts);
+								var datats = Buffer.alloc(0);
+								worker.stdout.on('data', function(stdout) {
+									if (stdout.toString().includes("HEAD:") && conf[req.host].legacy) {
+										headersts[stdout.toString().split("HEAD:")[1].split(":")[0]] = stdout.toString().split("HEAD:")[1].split(":")[1].trim();
 									} else {
-										c.end("HTTP/1.1 500 Server Error\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/500.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+										datats = Buffer.concat([datats, stdout]);
 									}
 								});
-								break;
-							case "EACCES":
-								fs.stat(conf[req.host].location+"/403.html", function(err2, stat2) {
-									if (err2 != undefined) {
-										c.end("HTTP/1.1 403 Access Error\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 403</title></head><body><h1>HTTP Error 403</h1>Can not read file "+req.path+"<br/><br/><i>Technical information:</i><br/>Make sure your file is readable by the webserver user.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
-									} else {
-										c.end("HTTP/1.1 403 Access Error\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/403.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+								worker.on('close', function(code) {
+									headersts['Content-Length'] = datats.length;
+									c.write("HTTP/1.1 200 OK\r\n");
+									for (var header in headersts) {
+										c.write(header+": "+headersts[header]+"\r\n");
 									}
+									c.write("\r\n");
+									c.write(datats);
+									c.end();
 								});
-								break;
-							case "ENOENT":
-								fs.stat(conf[req.host].location+"/404.html", function(err2, stat2) {
-									if (err2 != undefined) {
-										c.end("HTTP/1.1 404 Not Found\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 404</title></head><body><h1>HTTP Error 404</h1>File "+req.path+" not found<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
-									} else {
-										c.end("HTTP/1.1 404 Not Found\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/404.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
-									}
+								worker.on('message', function(msg) {
+									headersts[stdout.toString().split(":")[0]] = stdout.toString().split(":")[1].trim();
 								});
-								break;
-						}
-					} else {
-						if (req.path.endsWith(".sjs")) {
-							var execopts = {
-								maxBuffer: 100000000,
-								env: {
-									'PATH': process.env['PATH'],
-									'COOKIES': req.headers.cookie
-								}
-							}
-							if (conf[req.host].legacy) {
-								var datatmp = req.data.split("&");
-								for (var data in datatmp) {
-									req.params[datatmp[data].split("=")[0]] = datatmp[data].split("=")[1];
-								}
-							}
-							for (var param in req.params) {
-								execopts['env'][param] = req.params[param];
-							}
-							execopts.env.HOST = req.host;
-							execopts.env.METHOD = req.method;
-							execopts.env.PATH = process.env.PATH;
-							execopts.env.PWD = conf[req.host].location;
-							execopts.env.CWD = conf[req.host].location;
-							execopts.cwd = conf[req.host].location;
-							req.headers.reqip = c.remoteAddress;
-							execopts.env.HEADERS = JSON.stringify(req.headers);
-							execopts.env.COOKIES = JSON.stringify(req.cookies);
-							execopts.env.REQIP = c.remoteAddress;
-							execopts.env.DATA = req.data;
-							var worker = proc.spawn("node", [conf[req.host].location+req.path], execopts);
-							var datats = Buffer.alloc(0);
-							worker.stdout.on('data', function(stdout) {
-								if (stdout.toString().includes("HEAD:")) {
-									headersts[stdout.toString().split("HEAD:")[1].split(":")[0]] = stdout.toString().split("HEAD:")[1].split(":")[1].trim();
-								} else {
-									datats = Buffer.concat([datats, stdout]);
-								}
-							});
-							worker.on('close', function(code) {
-								headersts['content-length'] = datats.length;
+							} else {
 								c.write("HTTP/1.1 200 OK\r\n");
+								headersts['Content-Length'] = stat.size;
+								if (mimes[req.path.split(".")[req.path.split(".").length-1]] == undefined) {
+									headersts['Content-Type'] = mimes[""];
+								} else {
+									headersts['Content-Type'] = mimes[req.path.split(".")[req.path.split(".").length-1]];
+								}
+								headersts.Date = new Date().toUTCString();
+								headersts.Connection = "keep-alive";
 								for (var header in headersts) {
 									c.write(header+": "+headersts[header]+"\r\n");
 								}
 								c.write("\r\n");
-								c.write(datats);
-								c.end();
-							});
-						} else {
-							c.write("HTTP/1.1 200 OK\r\n");
-							headersts['content-length'] = stat.size;
-							if (mimes[req.path.split(".")[req.path.split(".").length-1]] == undefined) {
-								headersts['content-type'] = mimes[""];
-							} else {
-								headersts['content-type'] = mimes[req.path.split(".")[req.path.split(".").length-1]];
+								var stream = fs.createReadStream(conf[req.host].location+req.path);
+								stream.on('data', function(data) {
+									c.write(data);
+								});
+								stream.on('end', function() {c.end();});
 							}
-							headersts.date = new Date().toUTCString();
-							headersts.connection = "keep-alive";
-							for (var header in headersts) {
-								c.write(header+": "+headersts[header]+"\r\n");
-							}
-							c.write("\r\n");
-							var stream = fs.createReadStream(conf[req.host].location+req.path);
-							stream.on('data', function(data) {
-								c.write(data);
-							});
-							stream.on('end', function() {c.end();});
 						}
+					});
+				} else if (conf[req.host].type == "proxy") {
+					/*var client = undefined;
+					conf[req.host].location = conf[req.host].location.replace(/http:\/\//g, "").replace(/https:\/\//g, "").replace(/ws:\/\//g, "").replace(/wss:\/\//g, "");
+					if (conf[req.host].ssl == undefined || conf[req.host].ssl == false) {
+						if (conf[req.host].location.split(":").length == 1) {conf[req.host].location = conf[req.host].location+":80";}
+						if (conf[req.host].location.split(":").length == 2 && conf[req.host].location.split(":")[1].trim() == "") {conf[req.host].location = conf[req.host].location.trim()+"80";}
+						try{client = net.connect(conf[req.host].location.split(":")[1],conf[req.host].location.split(":")[0]);}catch(err){}
+					} else if (conf[req.host].ssl == true) {
+						if (conf[req.host].location.split(":").length == 1) {conf[req.host].location = conf[req.host].location+":443";}
+						if (conf[req.host].location.split(":").length == 2 && conf[req.host].location.split(":")[1].trim() == "") {conf[req.host].location = conf[req.host].location.trim()+"443";}
+						try{client = tls.connect(conf[req.host].location.split(":")[1],conf[req.host].location.split(":")[0]);}catch(err){}
+					} else {
+						c.end("HTTP/1.1 500 Invalid Configuration\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"ssl\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 					}
-				});
-			} else if (conf[req.host].type == "proxy") {
-				/*var client = undefined;
-				conf[req.host].location = conf[req.host].location.replace(/http:\/\//g, "").replace(/https:\/\//g, "").replace(/ws:\/\//g, "").replace(/wss:\/\//g, "");
-				if (conf[req.host].ssl == undefined || conf[req.host].ssl == false) {
-					if (conf[req.host].location.split(":").length == 1) {conf[req.host].location = conf[req.host].location+":80";}
-					if (conf[req.host].location.split(":").length == 2 && conf[req.host].location.split(":")[1].trim() == "") {conf[req.host].location = conf[req.host].location.trim()+"80";}
-					try{client = net.connect(conf[req.host].location.split(":")[1],conf[req.host].location.split(":")[0]);}catch(err){}
-				} else if (conf[req.host].ssl == true) {
-					if (conf[req.host].location.split(":").length == 1) {conf[req.host].location = conf[req.host].location+":443";}
-					if (conf[req.host].location.split(":").length == 2 && conf[req.host].location.split(":")[1].trim() == "") {conf[req.host].location = conf[req.host].location.trim()+"443";}
-					try{client = tls.connect(conf[req.host].location.split(":")[1],conf[req.host].location.split(":")[0]);}catch(err){}
-				} else {
-					c.end("HTTP/1.1 500 Invalid Configuration\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"ssl\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
-				}
-				if (client != undefined) {
+					if (client != undefined) {
 
-				}*/
-				c.end("HTTP/1.1 500 Work in Progress\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Proxying is work in progress.<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
-			} else {
-				c.end("HTTP/1.1 500 Invalid Configuration\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"type\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+					}*/
+					c.end("HTTP/1.1 500 Work in Progress\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Proxying is work in progress.<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+				} else {
+					c.end("HTTP/1.1 500 Invalid Configuration\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"type\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+				}
 			}
 		}
 	});
 }
 
-var server = net.createServer(function(c) {
-	serverListener(c);
-});
-
+var server = undefined;
 var sserver = undefined;
-
 if (cluster.isMaster == false) {
-	if (JSON.parse(process.env.argv).indexOf("--https") > -1 || JSON.parse(process.env.argv).indexOf("-s") > -1) {
+	if (JSON.parse(process.env.argv).indexOf("--no-http") == -1 && JSON.parse(process.env.argv).indexOf("-nh") == -1) {
+		server = net.createServer(function(c) {
+			serverListener(c,false);
+		});
+	}
+	if (JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1) {
 		sserver = tls.createServer({key:fs.readFileSync("ssl/key.pem"),cert:fs.readFileSync("ssl/cert.pem")}, function(c) {
-			serverListener(c);
+			serverListener(c,true);
 		});
 	}
 }
@@ -318,16 +323,22 @@ if (cluster.isMaster) {
 	log("Worker started");
 	readconf();
 	try{mimes = JSON.parse(fs.readFileSync("./mimes.json"));}catch(err){}
-	if (JSON.parse(process.env.argv).indexOf("--listen") > -1) {
-		server.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("--listen"))+1)]);
-	} else if (JSON.parse(process.env.argv).indexOf("-l") > -1) {
-		server.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("-l"))+1)]);
-	} else {
-		server.listen(80);
+	if (JSON.parse(process.env.argv).indexOf("--no-http") == -1 && JSON.parse(process.env.argv).indexOf("-nh") == -1) {
+		if (JSON.parse(process.env.argv).indexOf("--listen") > -1) {
+			server.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("--listen"))+1)]);
+		} else if (JSON.parse(process.env.argv).indexOf("-l") > -1) {
+			server.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("-l"))+1)]);
+		} else {
+			server.listen(80);
+		}
 	}
-	if (JSON.parse(process.env.argv).indexOf("--https") > -1) {
-		sserver.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("--https"))+1)]);
-	} else if (JSON.parse(process.env.argv).indexOf("-s") > -1) {
-		sserver.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("-s"))+1)]);
+	if (JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1) {
+		if (JSON.parse(process.env.argv).indexOf("--https") > -1) {
+			sserver.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("--https"))+1)]);
+		} else if (JSON.parse(process.env.argv).indexOf("-s") > -1) {
+			sserver.listen(JSON.parse(process.env.argv)[(parseInt(JSON.parse(process.env.argv).indexOf("-s"))+1)]);
+		} else {
+			sserver.listen(443);
+		}
 	}
 }
