@@ -149,7 +149,7 @@ function serverListener(c, https) {
 			req.data = tmp.slice(headersend,tmp.length).join("\n");
 			log(c.remoteAddress+" "+req.method+" "+req.headers.host+tmp[0].split(" ")[1]);
 			if (conf[req.host] == undefined) {req.host = "default";}
-			if (conf[req.host].upgradeInsecure && req.headers['upgrade-insecure-requests'] == "1" && !https && JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1) {
+			if (conf[req.host].upgradeInsecure && req.headers['upgrade-insecure-requests'] == "1" && !https && (JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1 || (JSON.parse(process.env.argv).indexOf("-ins") > -1 || JSON.parse(process.env.argv).indexOf("--ignore-no-https") > -1))) {
 				c.end("HTTP/1.1 307 Moved Temporarily\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\nLocation: https://"+req.headers.host+tmp[0].split(" ")[1]+"\r\nVary: Upgrade-Insecure-Requests\r\n\r\nUpgrading to HTTPS...");
 			} else {
 				if (conf[req.host].type == "local") {
