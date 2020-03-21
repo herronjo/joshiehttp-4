@@ -116,7 +116,7 @@ function serverListener(c, https) {
 			if (pathtmp[1] != undefined) {
 				var pathtmp2 = pathtmp[1].split("&");
 				for (var i in pathtmp2) {
-					req.params[pathtmp2[i].split("=")[0]] = decodeURIComponent(pathtmp2[i].split("=")[1]);
+					req.params[decodeURIComponent(pathtmp2[i].split("=")[0])] = decodeURIComponent(pathtmp2[i].split("=")[1]);
 				}
 			}
 			var headersend = tmp.length-1;
@@ -198,7 +198,7 @@ function serverListener(c, https) {
 								if (conf[req.host].legacy) {
 									var datatmp = req.data.split("&");
 									for (var data in datatmp) {
-										req.params[datatmp[data].split("=")[0]] = datatmp[data].split("=")[1];
+										req.params[decodeURIComponent(datatmp[data].split("=")[0])] = decodeURIComponent(datatmp[data].split("=")[1]);
 									}
 								}
 								for (var param in req.params) {
