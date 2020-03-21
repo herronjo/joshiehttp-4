@@ -2,10 +2,11 @@ const version = "4.0";
 const net = require('net');
 const tls = require('tls');
 const fs = require('fs');
+const zlib = require('zlib');
 const proc = require('child_process');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
-var conf = {"default":{"type":"local","location":".","upgradeInsecure":true}};
+var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"gzip":true}};
 var mimes = {"": "application/octet-stream"};
 var isKilled = false;
 
@@ -216,22 +217,45 @@ function serverListener(c, https) {
 								execopts.env.DATA = req.data;
 								var worker = proc.fork(conf[req.host].location+req.path, [], execopts);
 								var datats = Buffer.alloc(0);
+								var status = 200;
+								var statusmsg = "OK";
 								worker.stdout.on('data', function(stdout) {
 									if (stdout.toString().includes("HEAD:") && conf[req.host].legacy) {
-										headersts[stdout.toString().split("HEAD:")[1].split(":")[0]] = stdout.toString().split("HEAD:")[1].split(":")[1].trim();
+										var headtmp = msg.toString().split("HEAD:");
+										headtmp.shift();
+										headtmp = headtmp.join("HEAD:").split(":");
+										var head = headtmp[0];
+										headtmp.shift();
+										headtmp = headtmp.join(":");
+										headersts[head] = headtmp.trim();
 									} else {
 										datats = Buffer.concat([datats, stdout]);
 									}
 								});
 								worker.on('message', function(msg) {
-									headersts[msg.toString().split(":")[0]] = msg.toString().split(":")[1].trim();
+									if (msg.toString().startsWith("HEAD:")) {
+										var headtmp = msg.toString().split("HEAD:");
+										headtmp.shift();
+										headtmp = headtmp.join("HEAD:").split(":");
+										var head = headtmp[0];
+										headtmp.shift();
+										headtmp = headtmp.join(":");
+										headersts[head] = headtmp.trim();
+									} else if (msg.toString().startsWith("STATUS:")) {
+										var statustmp = msg.toString().split("STATUS:");
+										statustmp.shift();
+										statustmp = statustmp.join("STATUS:").split(":");
+										status = parseInt(statustmp[0]);
+										statustmp.shift();
+										statusmsg = statustmp.join(":");
+									}
 								});
 								worker.on('error', function(err) {
 									console.log(err);
 								});
 								worker.on('close', function(code) {
-									headersts['content-length'] = datats.length;
-									c.write("HTTP/1.1 200 OK\r\n");
+									headersts['Content-Length'] = datats.length;
+									c.write("HTTP/1.1 "+status.toString()+" "+statusmsg+"\r\n");
 									for (var header in headersts) {
 										c.write(header+": "+headersts[header]+"\r\n");
 									}
@@ -241,7 +265,15 @@ function serverListener(c, https) {
 								});
 							} else {
 								c.write("HTTP/1.1 200 OK\r\n");
-								headersts['Content-Length'] = stat.size;
+								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
+									if (req.headers['accept-encoding'].includes("gzip")) {
+										headersts['Content-Encoding'] = "gzip";
+									} else {
+										headersts['Content-Length'] = stat.size;
+									}
+								} else {
+									headersts['Content-Length'] = stat.size;
+								}
 								if (mimes[req.path.split(".")[req.path.split(".").length-1]] == undefined) {
 									headersts['Content-Type'] = mimes[""];
 								} else {
@@ -255,9 +287,23 @@ function serverListener(c, https) {
 								c.write("\r\n");
 								var stream = fs.createReadStream(conf[req.host].location+req.path);
 								stream.on('data', function(data) {
-									c.write(data);
+									if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
+										if (req.headers['accept-encoding'].includes("gzip")) {
+											stream.pause();
+											zlib.gzip(data, function(err,result) {
+												c.write(result);
+												stream.resume();
+											});
+										} else {
+											c.write(data);
+										}
+									} else {
+										c.write(data);
+									}
 								});
-								stream.on('end', function() {c.end();});
+								stream.on('end', function() {
+									c.end();
+								});
 							}
 						}
 					});
