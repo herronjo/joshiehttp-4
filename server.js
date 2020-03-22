@@ -198,7 +198,11 @@ function serverListener(c, https) {
 								if (conf[req.host].legacy) {
 									var datatmp = req.data.split("&");
 									for (var data in datatmp) {
-										req.params[decodeURIComponent(datatmp[data].split("=")[0])] = decodeURIComponent(datatmp[data].split("=")[1]);
+										try{
+											req.params[decodeURIComponent(datatmp[data].split("=")[0])] = decodeURIComponent(datatmp[data].split("=")[1]);
+										} catch(err) {
+											req.params[datatmp[data].split("=")[0]] = datatmp[data].split("=")[1];
+										}
 									}
 								}
 								for (var param in req.params) {
