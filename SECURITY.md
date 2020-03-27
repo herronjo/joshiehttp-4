@@ -2,17 +2,20 @@
 
 ## Supported Versions
 
-:green_check_mark: = Actively maintained
+### Key
 
-:ballot_box_with_check: = LTS
+| Symbol                  | Meaning                        |
+| ----------------------- | ------------------------------ |
+| :white_check_mark:      | Actively maintained            |
+| :ballot_box_with_check: | LTS                            |
+| :clock3:                | Legacy, soon to be unsupported |
+| :x:                     | Unsupported version            |
 
-:clock3: = Legacy, soon to be unsupported
-
-:x: = Unsupported version
+### Versions
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 4.0     | :green_check_mark: |
+| 4.0     | :white_check_mark: |
 | 3.0.3   | :clock3:           |
 | < 3.0.3 | :x:                |
 
