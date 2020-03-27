@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
 :green_check_mark: = Actively maintained
+
 :ballot_box_with_check: = LTS
+
 :clock3: = Legacy, soon to be unsupported
+
 :x: = Unsupported version
 
 | Version | Supported          |
