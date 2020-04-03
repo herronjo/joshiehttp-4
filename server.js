@@ -110,7 +110,7 @@ function serverListener(c, https) {
 			var headersts = {"Access-Control-Allow-Origin":"*"};
 			var tmp = tmpbuf.split("\n");
 			req.method = tmp[0].split(" ")[0];
-			req.path = decodeURIComponent(tmptmp[0].split(" ")[1].split("?")[0]);
+			req.path = decodeURIComponent(tmp[0].split(" ")[1].split("?")[0]);
 			if (req.path == "") {req.path = "/";}
 			var pathtmp = tmp[0].split(" ")[1].split("?");
 			if (pathtmp[1] != undefined) {
