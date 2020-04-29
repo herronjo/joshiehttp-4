@@ -78,13 +78,15 @@ function serverListener(c, https) {
 			}
 		}
 	}
-	try {
-		process.setgid("secureweb");
-		process.setegid("secureweb");
-		process.setuid("secureweb");
-		process.seteuid("secureweb");
-	} catch(err) {
-		log("ERROR: Unable to de-escalate permissions, please add the \"secureweb\" user to your system.");
+	if (process.platform != "win32") {
+		try {
+			process.setgid("secureweb");
+			process.setegid("secureweb");
+			process.setuid("secureweb");
+			process.seteuid("secureweb");
+		} catch(err) {
+			log("ERROR: Unable to de-escalate permissions, please add the \"secureweb\" user to your system.");
+		}
 	}
 	var tmpbuf = "";
 	var req = {
@@ -354,13 +356,18 @@ if (cluster.isMaster == false) {
 	}
 }
 
+var workers = [];
+
 function fork(env) {
 	var worker = cluster.fork(env);
 	worker.on('close', function(code) {
+		log("Worker died with code "+code);
+		workers.splice(workers.indexOf(worker), 1);
 		if (!isKilled) {
 			fork(env);
 		}
 	});
+	workers.push(worker);
 }
 
 if (cluster.isMaster) {
@@ -370,9 +377,41 @@ if (cluster.isMaster) {
 	for (var i = 0; i < numCPUs; i++) {
 		fork(env);
 	}
+	var ccserver = net.createServer(function(c) {
+		var buf = "";
+		c.on('data', function(data) {
+			buf += data.toString();
+			if (buf.includes("\n")) {
+				var cmd = buf.trim();
+				switch (cmd) {
+					default:
+						c.end("unknown command\n");
+						break;
+					case "stop":
+						c.end("stopping\n");
+						isKilled = true;
+						for (var worker in workers) {
+							workers[worker].send("kill");
+						}
+						process.exit(0);
+						break;
+					case "reload":
+						c.end("reloading\n");
+						for (var worker in workers) {
+							workers[worker].send("reload");
+						}
+						break;
+				}
+			}
+		});
+		c.on('end', function() {
+			
+		});
+	});
+	ccserver.listen(81);
 } else {
 	process.on('message', function(msg) {
-		if (msg == "reloadConf") {
+		if (msg == "reload") {
 			readconf();
 		} else if (msg == "kill") {
 			process.exit(0);
