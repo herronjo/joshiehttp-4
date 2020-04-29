@@ -1,0 +1,16 @@
+{
+	"name":"joshiehttp",
+	"version": "4.0",
+	"description": "A simple Node.JS webserver with scripting support",
+	"main": "server.js",
+	"private": true,
+	"author": {
+		"name": "Joshua Herron",
+		"email": "herronjo@joshiepoo.gq",
+		"url": "joshiepoo.gq"
+	},
+	"pkg": {
+		"scripts": "server.js",
+		"assets": ["main.conf","mimes.json"]
+	}
+}

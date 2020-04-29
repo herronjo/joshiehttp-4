@@ -269,6 +269,7 @@ function serverListener(c, https) {
 								});
 							} else {
 								c.write("HTTP/1.1 200 OK\r\n");
+								headersts['Server'] = "JoshieHTTP/"+version+"_"+process.platform;
 								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
 									if (req.headers['accept-encoding'].includes("gzip")) {
 										headersts['Content-Encoding'] = "gzip";
@@ -365,7 +366,7 @@ if (cluster.isMaster) {
 	log("Started");
 	var env = process.env;
 	env.argv = JSON.stringify(process.argv);
-	for (let i = 0; i < numCPUs; i++) {
+	for (var i = 0; i < numCPUs; i++) {
 		fork(env);
 	}
 } else {
