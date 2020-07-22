@@ -7,7 +7,7 @@ const zlib = require('zlib');
 const proc = require('child_process');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
-var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"gzip":true}};
+var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"gzip":true,"ssl":{"key":"ssl/key.pem","cert":"ssl/cert.pem"}}};
 var mimes = {"": "application/octet-stream"};
 var isKilled = false;
 
@@ -341,6 +341,33 @@ function serverListener(c, https) {
 	});
 }
 
+function snicallback(servername, cb) {
+	console.log(servername);
+	var server = "default";
+	var key = "";
+	var cert = "";
+	if (conf[servername] != undefined) {
+		if (conf[servername].ssl != undefined) {
+			if (conf[servername].ssl.key != undefined && conf[servername].ssl.cert != undefined) {
+				server = servername;
+			}
+		}
+	}
+	if (conf[server].ssl != undefined) {
+		if (conf[server].ssl.key != undefined && conf[server].ssl.cert != undefined) {
+			key = conf[server].ssl.key;
+			cert = conf[server].ssl.cert;
+		} else {
+			key = "ssl/key.pem";
+			cert = "ssl/cert.pem";
+		}
+	} else {
+		key = "ssl/key.pem";
+		cert = "ssl/cert.pem";
+	}
+	cb(null, tls.createSecureContext({cert:fs.readFileSync(cert),key:fs.readFileSync(key)}));
+}
+
 var server = undefined;
 var sserver = undefined;
 if (cluster.isMaster == false) {
@@ -350,7 +377,7 @@ if (cluster.isMaster == false) {
 		});
 	}
 	if (JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1) {
-		sserver = tls.createServer({key:fs.readFileSync("ssl/key.pem"),cert:fs.readFileSync("ssl/cert.pem")}, function(c) {
+		sserver = tls.createServer({SNICallback: snicallback}, function(c) {
 			serverListener(c,true);
 		});
 	}

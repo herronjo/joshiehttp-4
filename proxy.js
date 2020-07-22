@@ -105,9 +105,34 @@ var server = net.createServer(function(c) {
 	});
 });
 
+function snicallback(servername, cb) {
+	var server = "default";
+	var key = "";
+	var cert = "";
+	if (conf[servername] != undefined) {
+		if (conf[servername].ssl != undefined) {
+			if (conf[servername].ssl.key != undefined && conf[servername].ssl.cert != undefined) {
+				server = servername;
+			}
+		}
+	}
+	if (conf[server].ssl != undefined) {
+		if (conf[server].ssl.key != undefined && conf[server].ssl.cert != undefined) {
+			key = conf[server].ssl.key;
+			cert = conf[server].ssl.cert;
+		} else {
+			key = "ssl/key.pem";
+			cert = "ssl/cert.pem";
+		}
+	} else {
+		key = "ssl/key.pem";
+		cert = "ssl/cert.pem";
+	}
+	cb(null, tls.createSecureContext({cert:fs.readFileSync(cert),key:fs.readFileSync(key)}));
+}
+
 var options = {
-	key: fs.readFileSync('ssl/key.pem'),
-	cert: fs.readFileSync('ssl/cert.pem')
+	SNICallback: snicallback
 }
 
 var sserver = tls.createServer(options,function(c) {
