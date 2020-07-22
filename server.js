@@ -100,16 +100,28 @@ function serverListener(c, https) {
 	}
 	c.on('end', function() {
 		ended = true;
+		if (client != undefined) {
+			client.end();
+		}
 	});
 	c.on('close', function() {
 		ended = true;
+		if (client != undefined) {
+			client.end();
+		}
 	});
 	c.on('error', function(err) {
 		ended = true;
+		if (client != undefined) {
+			client.end();
+        }
 	});
+	var client = undefined;
 	c.on('data', function(data) {
 		tmpbuf += data.toString();
-		if (tmpbuf.replace(/\r/g, "").includes("\n\n")) {
+		if (client != undefined) {
+			client.write(data);
+        } else if (tmpbuf.replace(/\r/g, "").includes("\n\n")) {
 			var headersts = {"Access-Control-Allow-Origin":"*"};
 			var tmp = tmpbuf.split("\n");
 			req.method = tmp[0].split(" ")[0];
@@ -316,23 +328,30 @@ function serverListener(c, https) {
 						}
 					});
 				} else if (conf[req.host].type == "proxy") {
-					/*var client = undefined;
-					conf[req.host].location = conf[req.host].location.replace(/http:\/\//g, "").replace(/https:\/\//g, "").replace(/ws:\/\//g, "").replace(/wss:\/\//g, "");
-					if (conf[req.host].ssl == undefined || conf[req.host].ssl == false) {
-						if (conf[req.host].location.split(":").length == 1) {conf[req.host].location = conf[req.host].location+":80";}
-						if (conf[req.host].location.split(":").length == 2 && conf[req.host].location.split(":")[1].trim() == "") {conf[req.host].location = conf[req.host].location.trim()+"80";}
-						try{client = net.connect(conf[req.host].location.split(":")[1],conf[req.host].location.split(":")[0]);}catch(err){}
-					} else if (conf[req.host].ssl == true) {
-						if (conf[req.host].location.split(":").length == 1) {conf[req.host].location = conf[req.host].location+":443";}
-						if (conf[req.host].location.split(":").length == 2 && conf[req.host].location.split(":")[1].trim() == "") {conf[req.host].location = conf[req.host].location.trim()+"443";}
-						try{client = tls.connect(conf[req.host].location.split(":")[1],conf[req.host].location.split(":")[0]);}catch(err){}
+					var location = conf[req.host].location.replace(/http:\/\//g, "").replace(/https:\/\//g, "").replace(/ws:\/\//g, "").replace(/wss:\/\//g, "");
+					if (conf[req.host].protocol == undefined || conf[req.host].protocol == "http" || conf[req.host].protocol == "ws") {
+						if (location.split(":").length == 1) {location = location+":80";}
+						if (location.split(":").length == 2 && location.split(":")[1].trim() == "") {location = location.trim()+"80";}
+						try{client = net.connect(location.split(":")[1],location.split(":")[0]);}catch(err){}
+					} else if (conf[req.host].protocol == "https" || conf[req.host].protocol == "wss") {
+						if (location.split(":").length == 1) {location = location+":443";}
+						if (location.split(":").length == 2 && location.split(":")[1].trim() == "") {location = location.trim()+"443";}
+						try{client = tls.connect(location.split(":")[1],location.split(":")[0]);}catch(err){}
 					} else {
-						c.end("HTTP/1.1 500 Invalid Configuration\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"ssl\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+						c.end("HTTP/1.1 500 Invalid Configuration\r\ncontent-type: text/html\r\ndate: "+new Date().toUTCString()+"\r\nserver: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"protocol\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 					}
 					if (client != undefined) {
-
-					}*/
-					c.end("HTTP/1.1 500 Work in Progress\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Proxying is work in progress.<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+						client.on('data', function (data) {
+							c.write(data);
+						});
+						client.on('close', function () {
+							c.end();
+						});
+						client.on('end', function () {
+							c.end();
+						});
+						client.write(Buffer.from(tmpbuf.replace(/\r\n\r\n/, "\r\nX-Forwarded-For: " + c.remoteAddress + "\r\n\r\n"),'utf8'));
+					}
 				} else {
 					c.end("HTTP/1.1 500 Invalid Configuration\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>The server operator has misconfigured this site.<br/><br/><i>Technical information:</i><br/>Site \""+req.host+"\" has an invalid \"type\" value.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 				}
@@ -342,7 +361,6 @@ function serverListener(c, https) {
 }
 
 function snicallback(servername, cb) {
-	console.log(servername);
 	var server = "default";
 	var key = "";
 	var cert = "";
