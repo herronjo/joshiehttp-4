@@ -7,7 +7,7 @@ const zlib = require('zlib');
 const proc = require('child_process');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
-var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"gzip":true,"ssl":{"key":"ssl/key.pem","cert":"ssl/cert.pem"}}};
+var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"gzip":true,"headers":{"Access-Control-Allow-Origin":"*"},"ssl":{"key":"ssl/key.pem","cert":"ssl/cert.pem"}}};
 var mimes = {"": "application/octet-stream"};
 var isKilled = false;
 
@@ -122,7 +122,7 @@ function serverListener(c, https) {
 		if (client != undefined) {
 			client.write(data);
         } else if (tmpbuf.replace(/\r/g, "").includes("\n\n")) {
-			var headersts = {"Access-Control-Allow-Origin":"*"};
+			var headersts = {};
 			var tmp = tmpbuf.split("\n");
 			req.method = tmp[0].split(" ")[0];
 			req.path = decodeURIComponent(tmp[0].split(" ")[1].split("?")[0]);
@@ -164,6 +164,12 @@ function serverListener(c, https) {
 			req.data = tmp.slice(headersend,tmp.length).join("\n");
 			log(c.remoteAddress+" "+req.method+" "+req.headers.host+tmp[0].split(" ")[1]);
 			if (conf[req.host] == undefined) {req.host = "default";}
+			if (conf.default.headers != undefined) {
+				headersts = {...headersts, ...conf.default.headers};
+			}
+			if (req.host != 'default' && conf[req.host].headers != undefined) {
+				headersts = {...headersts, ...conf[req.host].headers};
+            }
 			if (conf[req.host].upgradeInsecure && req.headers['upgrade-insecure-requests'] == "1" && !https && (JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1 || (JSON.parse(process.env.argv).indexOf("-ins") > -1 || JSON.parse(process.env.argv).indexOf("--ignore-no-https") > -1))) {
 				c.end("HTTP/1.1 307 Moved Temporarily\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\nLocation: https://"+req.headers.host+tmp[0].split(" ")[1]+"\r\nVary: Upgrade-Insecure-Requests\r\n\r\nUpgrading to HTTPS...");
 			} else {
