@@ -288,6 +288,7 @@ function serverListener(c, https) {
 								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
 									if (req.headers['accept-encoding'].includes("gzip")) {
 										headersts['Content-Encoding'] = "gzip";
+										headersts['Transfer-Encoding'] = "gzip";
 									} else {
 										headersts['Content-Length'] = stat.size;
 									}
@@ -305,24 +306,22 @@ function serverListener(c, https) {
 									c.write(header+": "+headersts[header]+"\r\n");
 								}
 								c.write("\r\n");
-								var stream = fs.createReadStream(conf[req.host].location+req.path);
-								stream.on('data', function(data) {
-									if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
-										if (req.headers['accept-encoding'].includes("gzip")) {
-											stream.pause();
-											zlib.gzip(data, function(err,result) {
-												c.write(result);
-												stream.resume();
-											});
-										} else {
-											c.write(data);
-										}
+								var stream = fs.createReadStream(conf[req.host].location + req.path);
+								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
+									if (req.headers['accept-encoding'].includes("gzip")) {
+										stream.pipe(zlib.createGzip()).pipe(c);
 									} else {
-										c.write(data);
+										stream.pipe(c);
 									}
-								});
+								} else {
+									stream.pipe(c);
+								}
 								stream.on('end', function() {
-									c.end();
+									if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined && req.headers['accept-encoding'].includes("gzip")) {
+										finished = true;
+									} else {
+										c.end();
+									}
 								});
 							}
 						}
