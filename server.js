@@ -122,7 +122,7 @@ function serverListener(c, https) {
 		if (client != undefined) {
 			client.write(data);
         } else if (tmpbuf.replace(/\r/g, "").includes("\n\n")) {
-			var headersts = {};
+			var headersts = {"Accept-Ranges":"bytes"};
 			var tmp = tmpbuf.split("\n");
 			req.method = tmp[0].split(" ")[0];
 			req.path = decodeURIComponent(tmp[0].split(" ")[1].split("?")[0]);
@@ -171,7 +171,7 @@ function serverListener(c, https) {
 				headersts = {...headersts, ...conf[req.host].headers};
             }
 			if (conf[req.host].upgradeInsecure && req.headers['upgrade-insecure-requests'] == "1" && !https && (JSON.parse(process.env.argv).indexOf("--no-https") == -1 && JSON.parse(process.env.argv).indexOf("-ns") == -1 || (JSON.parse(process.env.argv).indexOf("-ins") > -1 || JSON.parse(process.env.argv).indexOf("--ignore-no-https") > -1))) {
-				c.end("HTTP/1.1 307 Moved Temporarily\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\nLocation: https://"+req.headers.host+tmp[0].split(" ")[1]+"\r\nVary: Upgrade-Insecure-Requests\r\n\r\nUpgrading to HTTPS...");
+				c.end("HTTP/1.1 301 Moved Permanently\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\nLocation: https://"+req.headers.host+tmp[0].split(" ")[1]+"\r\nVary: Upgrade-Insecure-Requests\r\n\r\nUpgrading to HTTPS...");
 			} else {
 				if (conf[req.host].type == "local") {
 					try {if (req.path.endsWith("/") == false) {if (fs.statSync(conf[req.host].location+req.path).isDirectory()) {req.path = req.path+"/";headersts.refresh = "0;url="+req.path;}}} catch(err) {}
@@ -184,7 +184,7 @@ function serverListener(c, https) {
 										if (err2 != undefined) {
 											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Error accessing file "+req.path+"<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 										} else {
-											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/500.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/500.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
 										}
 									});
 									break;
@@ -193,7 +193,7 @@ function serverListener(c, https) {
 										if (err2 != undefined) {
 											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 403</title></head><body><h1>HTTP Error 403</h1>Can not read file "+req.path+"<br/><br/><i>Technical information:</i><br/>Make sure your file is readable by the webserver user.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 										} else {
-											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/403.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/403.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
 										}
 									});
 									break;
@@ -202,7 +202,7 @@ function serverListener(c, https) {
 										if (err2 != undefined) {
 											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 404</title></head><body><h1>HTTP Error 404</h1>File "+req.path+" not found<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 										} else {
-											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/404.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
+											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/404.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
 										}
 									});
 									break;
@@ -279,6 +279,7 @@ function serverListener(c, https) {
 									console.log(err);
 								});
 								worker.on('close', function(code) {
+									headersts['Server'] = "JoshieHTTP/"+version+"_"+process.platform;
 									headersts['Content-Length'] = datats.length;
 									c.write("HTTP/1.1 "+status.toString()+" "+statusmsg+"\r\n");
 									for (var header in headersts) {
@@ -289,7 +290,16 @@ function serverListener(c, https) {
 									c.end();
 								});
 							} else {
-								c.write("HTTP/1.1 200 OK\r\n");
+								var rangesmode = false;
+								if (req.headers.range != undefined) {
+									/*if () {
+										c.write("HTTP/1.1 206 Partial Content");
+										rangesmode = true;
+									}*/
+									c.write("HTTP/1.1 200 OK\r\n"); //temporary
+								} else {
+									c.write("HTTP/1.1 200 OK\r\n");
+								}
 								headersts['Server'] = "JoshieHTTP/"+version+"_"+process.platform;
 								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
 									if (req.headers['accept-encoding'].includes("gzip")) {
