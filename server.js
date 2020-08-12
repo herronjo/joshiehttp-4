@@ -182,7 +182,7 @@ function serverListener(c, https) {
 								case "default":
 									fs.stat(conf[req.host].location+"/500.html", function(err2, stat2) {
 										if (err2 != undefined) {
-											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Error accessing file "+req.path+"<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 500</title></head><body><h1>HTTP Error 500</h1>Error accessing file "+req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 										} else {
 											c.end("HTTP/1.1 500 Server Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/500.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
 										}
@@ -191,7 +191,7 @@ function serverListener(c, https) {
 								case "EACCES":
 									fs.stat(conf[req.host].location+"/403.html", function(err2, stat2) {
 										if (err2 != undefined) {
-											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 403</title></head><body><h1>HTTP Error 403</h1>Can not read file "+req.path+"<br/><br/><i>Technical information:</i><br/>Make sure your file is readable by the webserver user.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 403</title></head><body><h1>HTTP Error 403</h1>Can not read file "+req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"<br/><br/><i>Technical information:</i><br/>Make sure your file is readable by the webserver user.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 										} else {
 											c.end("HTTP/1.1 403 Access Error\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/403.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
 										}
@@ -200,7 +200,7 @@ function serverListener(c, https) {
 								case "ENOENT":
 									fs.stat(conf[req.host].location+"/404.html", function(err2, stat2) {
 										if (err2 != undefined) {
-											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 404</title></head><body><h1>HTTP Error 404</h1>File "+req.path+" not found<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
+											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n<!DOCTYPE html><html><head><title>HTTP Error 404</title></head><body><h1>HTTP Error 404</h1>File "+req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+" not found<br/><br/><i>Technical information:</i><br/>No additional information.<hr>JoshieHTTP/"+version+"_"+process.platform+"</body></html>");
 										} else {
 											c.end("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nDate: "+new Date().toUTCString()+"\r\nServer: JoshieHTTP/"+version+"_"+process.platform+"\r\n\r\n"+fs.readFileSync(conf[req.host].location+"/404.html",'utf8').replace(/{HOST}/g,req.host).replace(/{PATH}/g,req.path.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).replace(/{VERSION}/g,version).replace(/{PLATFORM}/g,process.platform));
 										}
