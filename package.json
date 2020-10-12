@@ -1,5 +1,5 @@
 {
-	"name":"joshiehttp",
+	"name": "joshiehttp",
 	"version": "4.0",
 	"description": "A simple Node.JS webserver with scripting support",
 	"main": "server.js",
@@ -11,6 +11,9 @@
 	},
 	"pkg": {
 		"scripts": "server.js",
-		"assets": ["main.conf","mimes.json"]
+		"assets": [
+			"main.conf",
+			"mimes.json"
+		]
 	}
 }

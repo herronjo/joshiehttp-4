@@ -15,16 +15,20 @@ process.on('uncaughtException', function(err) {
 	if (fs.existsSync("./logs") == false) {
 		try {
 			fs.mkdirSync("./logs");
+			fs.chmodSync("./logs", 0o777);
 		} catch(err) {}
 	}
 	if (fs.existsSync("./logs/errors") == false) {
 		try {
 			fs.mkdirSync("./logs/errors");
+			fs.chmodSync("./logs/errors", 0o777);
 		} catch(err) {}
 	}
 	try {
 		var date = new Date().getTime();
-		fs.writeFileSync("./logs/errors/err-"+date+".log",err);
+		var filename = "./logs/errors/err-"+date+".log";
+		fs.writeFileSync(filename,err);
+		fs.chmodSync(filename, 0o777);
 	} catch(err) {}
 	console.log(err);
 	log("Process died");
@@ -291,20 +295,41 @@ function serverListener(c, https) {
 								});
 							} else {
 								var rangesmode = false;
+								var multirangesmode = false;
+								var ranges = [[0,stat.size]];
+								var separator = crypto.randomBytes(8).toString('hex');
 								if (req.headers.range != undefined) {
-									/*if () {
+									if (req.headers.range.trim() != "" && req.headers.range.trim().toLowerCase().startsWith("bytes=")) {
 										c.write("HTTP/1.1 206 Partial Content");
 										rangesmode = true;
-									}*/
-									c.write("HTTP/1.1 200 OK\r\n"); //temporary
+										rangestmp = req.headers.range.substring(6).replace(/ /g, "").split(",");
+										for (var i in rangestmp) {
+											var range = rangestmp[r].split("-");
+											if (range[0] == "") {
+												range[0] = stat.size-parseInt(range[1]);
+											} else {
+												range[0] = parseInt(range[0]);
+											}
+											if (range[1] == "") {
+												range[1] = stat.size;
+											} else {
+												range[1] = parseInt(range[1]);
+											}
+											ranges.push(range);
+										}
+										if (ranges.length > 1) {
+											multirangesmode = true;
+										}
+ 									} else {
+										c.write("HTTP/1.1 200 OK\r\n");
+									}
 								} else {
 									c.write("HTTP/1.1 200 OK\r\n");
 								}
 								headersts['Server'] = "JoshieHTTP/"+version+"_"+process.platform;
-								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
+								if (!rangesmode && conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
 									if (req.headers['accept-encoding'].includes("gzip")) {
 										headersts['Content-Encoding'] = "gzip";
-										headersts['Transfer-Encoding'] = "gzip";
 									} else {
 										headersts['Content-Length'] = stat.size;
 									}
@@ -318,27 +343,43 @@ function serverListener(c, https) {
 								}
 								headersts.Date = new Date().toUTCString();
 								headersts.Connection = "keep-alive";
-								for (var header in headersts) {
-									c.write(header+": "+headersts[header]+"\r\n");
+								if (multirangesmode) {
+									c.write("Content-Type: multipart/byteranges; boundary="+separator+"\r\n");
 								}
-								c.write("\r\n");
-								var stream = fs.createReadStream(conf[req.host].location + req.path);
-								if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
-									if (req.headers['accept-encoding'].includes("gzip")) {
-										stream.pipe(zlib.createGzip()).pipe(c);
+								var length = 0;
+								for (var r in ranges) {
+									length += ranges[r][1]-ranges[r][0]
+								}
+								c.write("Content-Length: "+length);
+								delete headersts["Content-Length"];
+								for (var r in ranges) {
+									var range = ranges[r];
+									if (rangesmode) {
+										c.write("--"+separator);
+										headersts["Content-Range"] = "bytes "+ranges[r]+"/"+stat.size;
+									}
+									for (var header in headersts) {
+										c.write(header+": "+headersts[header]+"\r\n");
+									}
+									c.write("\r\n");
+									var stream = fs.createReadStream(conf[req.host].location + req.path, {start: range[0], end: range[1]});
+									if (!rangesmode && conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
+										if (req.headers['accept-encoding'].includes("gzip")) {
+											stream.pipe(zlib.createGzip()).pipe(c);
+										} else {
+											stream.pipe(c);
+										}
 									} else {
 										stream.pipe(c);
 									}
-								} else {
-									stream.pipe(c);
+									stream.on('end', function() {
+										
+									});
 								}
-								stream.on('end', function() {
-									if (conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined && req.headers['accept-encoding'].includes("gzip")) {
-										finished = true;
-									} else {
-										c.end();
-									}
-								});
+								if (multirangesmode) {
+									c.write("--"+separator+"--");
+								}
+								c.end();
 							}
 						}
 					});
