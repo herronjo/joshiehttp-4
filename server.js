@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const version = "4.0";
+const crypto = require('crypto');
 const net = require('net');
 const tls = require('tls');
 const fs = require('fs');
