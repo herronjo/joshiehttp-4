@@ -7,7 +7,7 @@
 	"author": {
 		"name": "Joshua Herron",
 		"email": "herronjo@joshiepoo.gq",
-		"url": "joshiepoo.gq"
+		"url": "https://joshiepoo.gq"
 	},
 	"pkg": {
 		"scripts": "server.js",

@@ -8,7 +8,7 @@ const zlib = require('zlib');
 const proc = require('child_process');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
-var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"gzip":true,"headers":{"Access-Control-Allow-Origin":"*"},"ssl":{"key":"ssl/key.pem","cert":"ssl/cert.pem"}}};
+var conf = {"default":{"type":"local","location":".","upgradeInsecure":true,"compress":true,"headers":{"Access-Control-Allow-Origin":"*"},"ssl":{"key":"ssl/key.pem","cert":"ssl/cert.pem"}}};
 var mimes = {"": "application/octet-stream"};
 var isKilled = false;
 
@@ -297,14 +297,14 @@ function serverListener(c, https) {
 							} else {
 								var rangesmode = false;
 								var multirangesmode = false;
-								var ranges = [[0,stat.size]];
+								var ranges = [];
 								var separator = crypto.randomBytes(8).toString('hex');
 								if (req.headers.range != undefined) {
 									if (req.headers.range.trim() != "" && req.headers.range.trim().toLowerCase().startsWith("bytes=")) {
-										c.write("HTTP/1.1 206 Partial Content");
+										c.write("HTTP/1.1 206 Partial Content\r\n");
 										rangesmode = true;
 										rangestmp = req.headers.range.substring(6).replace(/ /g, "").split(",");
-										for (var i in rangestmp) {
+										for (var r in rangestmp) {
 											var range = rangestmp[r].split("-");
 											if (range[0] == "") {
 												range[0] = stat.size-parseInt(range[1]);
@@ -322,15 +322,21 @@ function serverListener(c, https) {
 											multirangesmode = true;
 										}
  									} else {
+										ranges = [[0,stat.size]];
 										c.write("HTTP/1.1 200 OK\r\n");
 									}
 								} else {
+									ranges = [[0,stat.size]];
 									c.write("HTTP/1.1 200 OK\r\n");
 								}
 								headersts['Server'] = "JoshieHTTP/"+version+"_"+process.platform;
-								if (!rangesmode && conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
-									if (req.headers['accept-encoding'].includes("gzip")) {
+								if (!rangesmode && conf[req.host].compress != undefined && conf[req.host].compress && req.headers['accept-encoding'] != undefined) {
+									if (req.headers['accept-encoding'].includes("br")) {
+										headersts['Content-Encoding'] = "br";
+									} else if (req.headers['accept-encoding'].includes("gzip")) {
 										headersts['Content-Encoding'] = "gzip";
+									} else if (req.headers['accept-encoding'].includes("deflate")) {
+										headersts['Content-Encoding'] = "deflate";
 									} else {
 										headersts['Content-Length'] = stat.size;
 									}
@@ -347,40 +353,72 @@ function serverListener(c, https) {
 								if (multirangesmode) {
 									c.write("Content-Type: multipart/byteranges; boundary="+separator+"\r\n");
 								}
-								var length = 0;
-								for (var r in ranges) {
-									length += ranges[r][1]-ranges[r][0]
+								if (rangesmode) {
+									var length = 0;
+									for (var r in ranges) {
+										length += ranges[r][1]-ranges[r][0]
+									}
+									c.write("Content-Length: "+length+"\r\n");
+									delete headersts["Content-Length"];
 								}
-								c.write("Content-Length: "+length);
-								delete headersts["Content-Length"];
-								for (var r in ranges) {
+								function response(c, r) {
+									console.log("Start");
+									console.log(r+"/"+(ranges.length-1));
+									console.log(JSON.stringify(ranges));
+									console.log(JSON.stringify(ranges[r]));
 									var range = ranges[r];
 									if (rangesmode) {
-										c.write("--"+separator);
-										headersts["Content-Range"] = "bytes "+ranges[r]+"/"+stat.size;
+										if (multirangesmode) {
+											c.write("\r\n--"+separator+"\r\n");
+										}
+										headersts["Content-Range"] = "bytes "+range[0]+"-"+range[1]+"/"+stat.size;
 									}
 									for (var header in headersts) {
 										c.write(header+": "+headersts[header]+"\r\n");
 									}
 									c.write("\r\n");
 									var stream = fs.createReadStream(conf[req.host].location + req.path, {start: range[0], end: range[1]});
-									if (!rangesmode && conf[req.host].gzip != undefined && conf[req.host].gzip && req.headers['accept-encoding'] != undefined) {
-										if (req.headers['accept-encoding'].includes("gzip")) {
-											stream.pipe(zlib.createGzip()).pipe(c);
-										} else {
-											stream.pipe(c);
-										}
-									} else {
-										stream.pipe(c);
-									}
 									stream.on('end', function() {
-										
+										stream.close();
+										console.log("Stream ended");
+										c.write("\r\n");
+										if (r < ranges.length-1) {
+											console.log("Next");
+											response(c, r+1);
+										} else {
+											if (multirangesmode) {
+												c.write("--"+separator+"--");
+											}
+											c.end();
+											console.log("End");
+										}
+									});
+									stream.on('pause', function() {
+										console.log("Stream paused");
+									});
+									stream.on('resume', function() {
+										console.log("Stream resumed");
+									});
+									stream.on('data', function(data) {
+										stream.pause();
+										if (!rangesmode && conf[req.host].compress != undefined && conf[req.host].compress && req.headers['accept-encoding'] != undefined) {
+											if (req.headers['accept-encoding'].includes("br")) {
+												c.write(zlib.brotliCompressSync(data));
+											} else if (req.headers['accept-encoding'].includes("gzip")) {
+												c.write(zlib.gzipSync(data));
+											} else if (req.headers['accept-encoding'].includes("deflate")) {
+												c.write(zlib.deflateSync(data));
+											} else {
+												c.write(data);
+											}
+										} else {
+											c.write(data);
+										}
+										console.log("Data sent");
+										stream.resume();
 									});
 								}
-								if (multirangesmode) {
-									c.write("--"+separator+"--");
-								}
-								c.end();
+								response(c, 0);
 							}
 						}
 					});
